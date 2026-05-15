@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="canvas_warm">#FFF7F0E6</color>
+    <color name="canvas_cool">#FFE5EEF4</color>
+    <color name="surface_panel">#F7FFFCFA</color>
+    <color name="panel_stroke">#1F264147</color>
+    <color name="preview_surface">#FFF9FCFD</color>
+    <color name="brand_primary">#235C63</color>
+    <color name="brand_secondary">#A55B2C</color>
+    <color name="brand_primary_soft">#DDEDEA</color>
+    <color name="brand_secondary_soft">#F6E4D7</color>
+    <color name="ink_strong">#1D2528</color>
+    <color name="ink_muted">#5F6B70</color>
+</resources>
