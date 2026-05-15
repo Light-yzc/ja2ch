@@ -5,12 +5,16 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.IBinder
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.Toast
 
 class MirrorOverlayService: Service(){
     companion object {
@@ -18,16 +22,29 @@ class MirrorOverlayService: Service(){
         const val ACTION_HIDE = "ja2ch.action.HIDE_MIRROR"
         const val ACTION_APPLY_STYLE = "ja2ch.action.APPLY_STYLE"
         const val ACTION_CHANGE_MODEL = "ja2ch.action.CHANGE_MODEL"
+        const val ACTION_CHANGE_SELECT_SIZE = "ja2ch.action.ACTION_CHANGE_SELECT_SIZE"
+        const val ACTION_CHANGE_SMODE_ON = "ja2ch.action.ACTION_CHANGE_SMODE_ON"
+
+        const val ACTION_CHANGE_SMODE_OFF = "ja2ch.action.ACTION_CHANGE_SMODE_OFF"
+
+
 
         const val EXTRA_TEXT_SIZE = "extra_text_size"
         const val EXTRA_MODEL_NAME = "extra_model_name"
+        const val EXTRA_Regeion = "extra_EXTRA_Regeion"
+
+
     }
+
+
     private var currentTextSize = 16f
     lateinit var windowManager: WindowManager
     private var rootView: FrameLayout? = null
     private var imageView: TranslateImageView? = null
 
     lateinit var ocrEngine: ImageTranslateEngine
+    private var selectionMode = false
+    var Region: Rect? = null
 
 
     override fun onCreate() {
@@ -45,14 +62,37 @@ class MirrorOverlayService: Service(){
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when(intent?.action) {
-            ACTION_SHOW -> showmirror()
+            ACTION_SHOW -> showmirror(Region)
             ACTION_HIDE -> hidemirror()
             ACTION_APPLY_STYLE -> changestyle(intent)
             ACTION_CHANGE_MODEL -> changemodel(intent)
+            ACTION_CHANGE_SELECT_SIZE -> changeSelect(intent)
+            ACTION_CHANGE_SMODE_ON -> {
+                selectionMode = true
+                Log.d("debug","已经设定 cls")
+            }
+            ACTION_CHANGE_SMODE_OFF -> {
+                selectionMode = false
+
+            }
         }
         return START_STICKY
     }
 
+    private fun changeSelect(intent: Intent) {
+        var regeion = intent.getParcelableExtra<RectF>(EXTRA_Regeion)
+        if (regeion!= null){
+            Region = Rect(
+                regeion.left.toInt(),
+                regeion.top.toInt(),
+                regeion.right.toInt(),
+                regeion.bottom.toInt()
+            )
+            Toast.makeText(this, "已选择区域${Region?.left}, ${Region?.top}", Toast.LENGTH_SHORT).show()
+        }
+        selectionMode = false
+        hidemirror()
+    }
     private fun changemodel(intent: Intent) {
         val modelName = intent.getStringExtra(EXTRA_MODEL_NAME) ?: ImageTranslateEngine.BACKEND_GOOGLE
         Log.d("233", "更改模型$modelName")
@@ -62,13 +102,12 @@ class MirrorOverlayService: Service(){
             .apply()
         ocrEngine = ImageTranslateEngine(modelName, this)
     }
-    private fun showmirror() {
+    private fun showmirror(myRegion: Rect?) {
         val bitmap = CaptureFrameStore.get() ?: return
-        if (rootView==null) {
             val container = FrameLayout(this).apply {
                 setBackgroundColor(Color.argb(180, 0, 0, 0))
-                setOnClickListener { hidemirror()
-                stopSelf()
+                setOnClickListener {
+                  hidemirror()
                 }
             }
             var preview = TranslateImageView(this).apply {
@@ -76,7 +115,12 @@ class MirrorOverlayService: Service(){
                 applyStyle(currentTextSize)
             }
             imageView = preview
-            ocrEngine.RunOcrAndTranslate(bitmap, ::Onsucc)
+            if (selectionMode) {
+                preview.selectionMode = selectionMode
+            }
+            else {
+                ocrEngine.RunOcrAndTranslate(bitmap, myRegion, ::Onsucc)
+            }
             val imgparam = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -91,16 +135,10 @@ class MirrorOverlayService: Service(){
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
             }
-
             rootView = container
             imageView = preview
             windowManager.addView(container, overlayParams)
 
-        }else {
-            imageView?.set_img(bitmap)
-            rootView?.visibility = View.VISIBLE
-            imageView?.applyStyle(currentTextSize)
-        }
     }
 
     fun changestyle(intent: Intent) {
@@ -111,8 +149,8 @@ class MirrorOverlayService: Service(){
     }
     private fun hidemirror() {
         rootView?.let{windowManager.removeView(it)}
-        rootView = null
         imageView = null
+        rootView = null
     }
 
     fun Onsucc(bitmap: Bitmap, items: List<OcrItem>) {

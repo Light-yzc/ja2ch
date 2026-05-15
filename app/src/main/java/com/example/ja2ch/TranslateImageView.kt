@@ -1,6 +1,7 @@
 package com.example.ja2ch
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -8,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import kotlin.collections.mutableListOf
 
@@ -19,11 +21,73 @@ class TranslateImageView(context: Context, attrs: AttributeSet? = null): View(co
         color = Color.WHITE
         alpha = 200
     }
+    var selectionMode = false
+    private var startX = 0f
+    private var startY = 0f
+    private var endX = 0f
+    private var endY = 0f
+    private var selecting = false
+    private val selectionPaint = Paint().apply {
+        color = Color.argb(70, 35, 92, 99)
+        style = Paint.Style.FILL
+    }
+
+    private val selectionStrokePaint = Paint().apply {
+        color = Color.rgb(35, 92, 99)
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
+
     val textPaint = Paint()
     init {
         textPaint.color = Color.BLACK
         textPaint.textSize = 48f
         textPaint.isAntiAlias = true
+    }
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        if (!::bitmap.isInitialized || !selectionMode){
+            return super.onTouchEvent(event)
+        }
+        when (event!!.action){
+            MotionEvent.ACTION_DOWN -> {
+                startX = event.x
+                startY = event.y
+                endX = event.x
+                endY = event.y
+                selecting = true
+                invalidate()
+
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                endX = event.x
+                endY = event.y
+                selecting = true
+                invalidate()
+            }
+
+            MotionEvent.ACTION_UP -> {
+                endX = event.x
+                endY = event.y
+                selecting = true
+                invalidate()
+                val subRect = RectF(
+                    minOf(startX, endX),
+                    minOf(startY, endY),
+                    maxOf(startX, endX),
+                    maxOf(startY, endY),
+                )
+                selecting = false
+                selectionMode = false
+                invalidate()
+                context.startService(Intent(context, MirrorOverlayService::class.java).apply {
+                    action = MirrorOverlayService.ACTION_CHANGE_SELECT_SIZE
+                    putExtra(MirrorOverlayService.EXTRA_Regeion, subRect)
+                })
+            }
+        }
+        return true
     }
 
     fun set_img(bitmap: Bitmap) {
@@ -71,6 +135,16 @@ class TranslateImageView(context: Context, attrs: AttributeSet? = null): View(co
                 )
             }
         }
+        if (selecting) {
+            val rect = RectF(
+                minOf(startX, endX),
+                minOf(startY, endY),
+                maxOf(startX, endX),
+                maxOf(startY, endY)
+            )
+            canvas.drawRect(rect, selectionPaint)
+            canvas.drawRect(rect, selectionStrokePaint)
+        }
     }
 
     private fun computeImageRect(bmp: Bitmap) {
@@ -94,8 +168,5 @@ class TranslateImageView(context: Context, attrs: AttributeSet? = null): View(co
             left + drawW,
             top + drawH
         )
-
-
-
     }
 }

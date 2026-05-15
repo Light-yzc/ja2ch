@@ -2,6 +2,7 @@ package com.example.ja2ch
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.util.Log
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -65,12 +66,20 @@ class ImageTranslateEngine(
         }
     }
 
-    fun RunOcrAndTranslate(bitmap: Bitmap, onSucc: (Bitmap, List<OcrItem>) -> Unit) {
+    fun RunOcrAndTranslate(bitmap: Bitmap, Region: Rect? = null,onSucc: (Bitmap, List<OcrItem>, ) -> Unit) {
         Log.d("TranslateBackend", "RunOcrAndTranslate backend=$engineBG")
-        val inputImg = InputImage.fromBitmap(bitmap, 0)
+        val TmpBitmap: Bitmap
+        if (Region != null) {
+            TmpBitmap = Bitmap.createBitmap(bitmap, Region.left, Region.top, Region.width(), Region.height())
+            Log.d("debug", "开始进行有限 orc 翻译")
+        } else {
+            TmpBitmap = bitmap
+        }
+        val inputImg = InputImage.fromBitmap(TmpBitmap, 0)
+
         ocrEngine.process(inputImg)
             .addOnSuccessListener { text ->
-                val items = extra_ocr_item(text)
+                val items = extra_ocr_item(text, Region)
                 if (items.isEmpty()) {
                     onSucc(bitmap, items)
                     return@addOnSuccessListener

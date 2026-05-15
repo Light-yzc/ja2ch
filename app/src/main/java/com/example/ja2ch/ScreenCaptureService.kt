@@ -17,6 +17,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.view.MotionEvent
 import androidx.core.app.NotificationCompat
 
@@ -40,7 +41,6 @@ class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
-    lateinit var GModel: String
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
             clearSession(stopProjection = false)
@@ -61,6 +61,19 @@ class ScreenCaptureService : Service() {
             ACTION_STOP_SESSION -> {
                 clearSession(stopProjection = true)
                 stopSelf()
+            }
+
+            MirrorOverlayService.ACTION_CHANGE_SMODE_ON -> {
+                startService(Intent(this, MirrorOverlayService::class.java).apply {
+                    action = MirrorOverlayService.ACTION_CHANGE_SMODE_ON
+                })
+                Log.d("debug","已经发送 on（1）")
+            }
+
+            MirrorOverlayService.ACTION_CHANGE_SMODE_OFF -> {
+                startService(Intent(this, MirrorOverlayService::class.java).apply {
+                    action = MirrorOverlayService.ACTION_CHANGE_SMODE_OFF
+                })
             }
         }
         return START_NOT_STICKY

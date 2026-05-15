@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageDecoder
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
@@ -146,7 +147,7 @@ class MainActivity : AppCompatActivity() {
             override fun onProgressChanged(p0: SeekBar?, p1: Int, p2: Boolean) {
                 var textSize = p1.coerceAtLeast(6).toFloat()
                 sendStyle(textSize)
-                text2.text = "当前字体:${textSize}"
+                text2.text = "当前字体:${textSize.toInt()}"
             }
 
             override fun onStopTrackingTouch(p0: SeekBar?) {
@@ -654,7 +655,7 @@ class MainActivity : AppCompatActivity() {
 
 }
 
-fun extra_ocr_item(text: Text): MutableList<OcrItem> {
+fun extra_ocr_item(text: Text, Region: Rect? = null): MutableList<OcrItem> {
     var items = mutableListOf<OcrItem>()
     var id = 0
 
@@ -666,11 +667,15 @@ fun extra_ocr_item(text: Text): MutableList<OcrItem> {
             if (src_text.isEmpty() || box == null) {
                 continue
             }
+            if (Region!= null) {
+                box.offset(Region.left, Region.top)
+            }
             items.add(OcrItem(
                 id = id++,
                 source_t = src_text,
                 box= box
             ))
+
         }
     }
     return  items
