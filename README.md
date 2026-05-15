@@ -112,85 +112,6 @@ android.permission.INTERNET
 - 在区域选择模式中拖动框选：只识别并翻译框选区域内文字
 - 点击翻译覆盖层：关闭当前翻译结果
 
-## 构建
-
-环境：
-
-- Android Studio
-- JDK 17 或 Android Studio 自带 JDK
-- Android Gradle Plugin 对应项目配置
-
-Debug 构建：
-
-```bash
-./gradlew assembleDebug
-```
-
-Release 构建：
-
-```bash
-./gradlew assembleRelease
-```
-
-如果要发布给用户，请使用 Android Studio 生成签名 APK。第一次发布时需要创建自己的 keystore：
-
-```text
-Build > Generate Signed App Bundle / APK > APK
-选择或创建 keystore
-选择 release 构建变体
-Finish
-```
-
-生成的 APK 通常在：
-
-```text
-app/release/app-release.apk
-```
-
-或者：
-
-```text
-app/build/outputs/apk/release/
-```
-
-签名文件和密码请自行保存，不要提交到 GitHub。以后升级同一个应用必须使用同一个 keystore 签名，否则 Android 会认为不是同一个应用，无法覆盖安装。
-
-## 发布
-
-建议使用 GitHub Releases 发布 signed release APK。
-
-1. 修改 `versionCode` 和 `versionName`
-2. 生成 signed release APK
-3. 在 GitHub 仓库页面进入 `Releases`
-4. 点击 `Draft a new release`
-5. 创建一个 tag，例如 `v0.1.0`
-6. 填写标题和更新说明
-7. 上传 APK 到 `Attach binaries by dropping them here or selecting them`
-8. 点击 `Publish release`
-
-推荐上传前把文件名改清楚一点，例如：
-
-```text
-JA2CH-v0.1.0.apk
-```
-
-不要把 APK、AAB、keystore、`local.properties` 提交进源码仓库。APK 应该作为 GitHub Release 附件发布，而不是放进普通源码提交。
-
-### 发布前检查
-
-- `versionCode` 比上一个发布版本更大
-- `versionName` 和 Release tag 对得上
-- 使用 release keystore 签名
-- 真机安装测试通过
-- 第三方 API Token 没有写死在源码里
-- `local.properties`、keystore、构建产物没有进入 Git 提交
-
-## 隐私
-
-JA2CH 本身不会内置 API key。
-
-使用第三方 API 翻译时，OCR 识别出的文本会发送到你配置的 API 服务商。请根据服务商隐私政策自行判断是否适合翻译敏感内容。
-
 ## 开发状态
 
 当前还在快速开发中，已知需要继续优化的方向：
@@ -205,4 +126,4 @@ JA2CH 本身不会内置 API key。
 
 ## License
 
-暂未指定许可证。正式开源前建议添加明确的开源协议，例如 MIT、Apache-2.0 或 GPL-3.0。
+Apache-2.0
