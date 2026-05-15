@@ -43,27 +43,7 @@ https://api.openai.com/v1/chat/completions
 https://api.siliconflow.cn/v1
 ```
 
-如果填写的是 base URL，例如：
 
-```text
-https://api.siliconflow.cn/v1
-```
-
-应用会在翻译时自动补成：
-
-```text
-https://api.siliconflow.cn/v1/chat/completions
-```
-
-模型列表会从：
-
-```text
-https://api.siliconflow.cn/v1/models
-```
-
-读取。
-
-API Token 和模型配置保存在本机 `SharedPreferences` 中。当前没有使用加密存储，请不要在不可信设备上保存敏感 token。
 
 ## 权限说明
 
