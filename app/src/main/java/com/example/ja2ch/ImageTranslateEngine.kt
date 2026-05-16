@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -40,9 +41,11 @@ class ImageTranslateEngine(
 
         const val DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions"
         const val DEFAULT_API_MODEL = "gpt-4o-mini"
-
-        private const val SYSTEM_PROMPT = "你是日文到简体中文的游戏/视觉小说界面翻译助手。忠实翻译，不要解释，不要罗马音化人名，不要擅自扩写。URL、英文品牌、数字和已经是中文的文本保持原样。只修正常见且明显的 OCR 错字。"
+        const val PREF_PROMPT = "api_prompt"
+        private const val SYSTEM_PROMPT = "你是游戏/视觉小说界面翻译助手。忠实翻译，不要解释，不要罗马音化人名，不要擅自扩写。URL、英文品牌、数字和已经是中文的文本保持原样。只修正常见且明显的 OCR 错字。"
     }
+    @Volatile
+    private var currentCall: Call? = null
 
     private val appContext = context.applicationContext
     private val ocrEngine = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
@@ -96,6 +99,10 @@ class ImageTranslateEngine(
             }
     }
 
+    fun cancelCurrentRequest() {
+        currentCall?.cancel()
+        currentCall = null
+    }
     private fun translateWithGoogle(
         items: MutableList<OcrItem>,
         bitmap: Bitmap,
@@ -165,7 +172,7 @@ class ImageTranslateEngine(
         val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL)?.trim().orEmpty()
         val apiKey = prefs.getString(PREF_API_KEY, "")?.trim().orEmpty()
         val model = prefs.getString(PREF_API_MODEL, DEFAULT_API_MODEL)?.trim().orEmpty()
-
+        val prefuserprompt = prefs.getString(PREF_PROMPT,"").orEmpty()
         if (apiUrl.isEmpty() || apiKey.isEmpty() || model.isEmpty()) {
             Log.w("ThirdPartyApi", "第三方 API 配置不完整")
             return texts
@@ -174,7 +181,7 @@ class ImageTranslateEngine(
         val joinedText = texts
             .mapIndexed { index, text -> "${batchMarker(index)}\n$text" }
             .joinToString(separator = "\n")
-        val userPrompt = buildBatchPrompt(joinedText, texts.size)
+        val userPrompt = buildBatchPrompt(prefuserprompt, joinedText, texts.size)
         val translatedText = requestThirdPartyText(
             apiUrl = apiUrl,
             apiKey = apiKey,
@@ -189,10 +196,14 @@ class ImageTranslateEngine(
         return translatedTexts
     }
 
-    private fun buildBatchPrompt(joinedText: String, segmentCount: Int): String {
+    private fun buildBatchPrompt(prefuserprompt: String, joinedText: String, segmentCount: Int): String {
+        val default_prompt = "把下面 ${segmentCount} 个日文 OCR 片段翻译成简体中文。\n"
         return """
-            把下面 $segmentCount 个日文 OCR 片段翻译成简体中文。
-
+             ${
+            prefuserprompt.ifEmpty {
+                default_prompt
+            }
+        }
             必须遵守：
             1. 每个片段前面的 <SEG_数字> 标记必须原样保留，例如 <SEG_000>。
             2. 每个标记后面只输出对应片段的中文译文。
@@ -245,20 +256,27 @@ class ImageTranslateEngine(
             .addHeader("Content-Type", "application/json")
             .post(bodyJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
+            val call = httpClient.newCall(request)
+            currentCall = call
 
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val raw = response.body?.string().orEmpty()
-                error("HTTP ${response.code}: $raw")
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val raw = response.body?.string().orEmpty()
+                        error("HTTP ${response.code}: $raw")
+                    }
+
+                    return if (isResponsesApi) {
+                        val raw = response.body?.string().orEmpty()
+                        parseResponsesText(raw)
+                    } else {
+                        readChatCompletionsStream(response.body?.source(), onPartial)
+                    }
+                }
+            } finally {
+                if (currentCall == call) currentCall = null
             }
 
-            return if (isResponsesApi) {
-                val raw = response.body?.string().orEmpty()
-                parseResponsesText(raw)
-            } else {
-                readChatCompletionsStream(response.body?.source(), onPartial)
-            }
-        }
     }
 
     private suspend fun readChatCompletionsStream(

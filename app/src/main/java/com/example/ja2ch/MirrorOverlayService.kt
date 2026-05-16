@@ -36,7 +36,7 @@ class MirrorOverlayService: Service(){
 
     }
 
-
+    private var requestID = 0
     private var currentTextSize = 16f
     lateinit var windowManager: WindowManager
     private var rootView: FrameLayout? = null
@@ -103,6 +103,7 @@ class MirrorOverlayService: Service(){
         ocrEngine = ImageTranslateEngine(modelName, this)
     }
     private fun showmirror(myRegion: Rect?) {
+        val curRequestID = requestID
         val bitmap = CaptureFrameStore.get() ?: return
             val container = FrameLayout(this).apply {
                 setBackgroundColor(Color.argb(180, 0, 0, 0))
@@ -119,7 +120,14 @@ class MirrorOverlayService: Service(){
                 preview.selectionMode = selectionMode
             }
             else {
-                ocrEngine.RunOcrAndTranslate(bitmap, myRegion, ::Onsucc)
+                ocrEngine.RunOcrAndTranslate(bitmap, myRegion) {
+                    bitmap, items ->
+                    Log.d("id", "curid$curRequestID, targeid$requestID")
+                    if (curRequestID == requestID) {
+                        Onsucc(bitmap, items)
+                    }
+                    else return@RunOcrAndTranslate
+                }
             }
             val imgparam = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -151,6 +159,8 @@ class MirrorOverlayService: Service(){
         rootView?.let{windowManager.removeView(it)}
         imageView = null
         rootView = null
+        requestID = requestID + 1
+        ocrEngine.cancelCurrentRequest()
     }
 
     fun Onsucc(bitmap: Bitmap, items: List<OcrItem>) {

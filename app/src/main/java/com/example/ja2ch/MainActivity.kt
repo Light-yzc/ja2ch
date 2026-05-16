@@ -286,6 +286,11 @@ class MainActivity : AppCompatActivity() {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         val modelSpinner = newDialogSpinner(modelAdapter)
+        val modelPromt = newDialogInput(
+            hint = "模型提示词，默认JA->CH",
+            text = prefs.getString(ImageTranslateEngine.PREF_PROMPT, "").orEmpty(),
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        )
         val loadModelsButton = newDialogButton(
             text = "加载模型列表",
             backgroundRes = R.drawable.bg_button_secondary,
@@ -332,6 +337,8 @@ class MainActivity : AppCompatActivity() {
         container.addView(newDialogLabel("模型名称"))
         container.addView(modelSpinner)
         container.addView(loadModelsButton)
+        container.addView(newDialogLabel("模型Prompt"))
+        container.addView(modelPromt)
         container.addView(actionRow)
         container.isFocusableInTouchMode = true
 
@@ -360,7 +367,8 @@ class MainActivity : AppCompatActivity() {
                 saveApiConfig(
                     apiUrl = urlInput.text.toString().trim(),
                     apiKey = keyInput.text.toString().trim(),
-                    model = modelSpinner.selectedItem?.toString().orEmpty()
+                    model = modelSpinner.selectedItem?.toString().orEmpty(),
+                    prompt = modelPromt.text.toString().trim()
                 )
                 saved = true
                 dialog.dismiss()
@@ -551,12 +559,13 @@ class MainActivity : AppCompatActivity() {
             .removeSuffix("/completions") + "/models"
     }
 
-    private fun saveApiConfig(apiUrl: String, apiKey: String, model: String) {
+    private fun saveApiConfig(apiUrl: String, apiKey: String, model: String, prompt: String) {
         getSharedPreferences(ImageTranslateEngine.PREFS_CLOUD_CONFIG, MODE_PRIVATE)
             .edit()
             .putString(ImageTranslateEngine.PREF_API_URL, apiUrl)
             .putString(ImageTranslateEngine.PREF_API_KEY, apiKey)
             .putString(ImageTranslateEngine.PREF_API_MODEL, model)
+            .putString(ImageTranslateEngine.PREF_PROMPT, prompt)
             .apply()
 
         Toast.makeText(this, "第三方 API 配置已保存", Toast.LENGTH_SHORT).show()
@@ -583,15 +592,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-//    fun start_float() {
-//        val intent = Intent(this, FloatingButtonService::class.java)
-//        startService(intent)
-//
-//        Toast.makeText(this, "悬浮按钮已启动，可以切回游戏", Toast.LENGTH_SHORT).show()
-//
-//        moveTaskToBack(true)
-//    }
-//    }
 
     fun run_ocr(bitmap: Bitmap) {
         val Input_img = InputImage.fromBitmap(bitmap, 0)
