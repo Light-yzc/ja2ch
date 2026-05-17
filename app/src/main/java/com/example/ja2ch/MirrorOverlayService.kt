@@ -103,6 +103,7 @@ class MirrorOverlayService: Service(){
         ocrEngine = ImageTranslateEngine(modelName, this)
     }
     private fun showmirror(myRegion: Rect?) {
+        hidemirror()
         val curRequestID = requestID
         val bitmap = CaptureFrameStore.get() ?: return
             val container = FrameLayout(this).apply {

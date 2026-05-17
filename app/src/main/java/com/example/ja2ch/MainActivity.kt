@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         Seeker = findViewById(R.id.seekBar)
         text2 = findViewById(R.id.textView2)
         spinner = findViewById(R.id.spinner)
+        spinner.setPopupBackgroundDrawable(getDrawable(R.drawable.shape_for_custom_spinner))
         apiStatusT = findViewById(R.id.textView3)
         currentBackend = loadSelectedBackend()
         updateBackendStatus()
@@ -439,6 +440,7 @@ class MainActivity : AppCompatActivity() {
         return Spinner(this).apply {
             this.adapter = adapter
             setBackgroundResource(R.drawable.bg_preview_frame)
+            setPopupBackgroundDrawable(getDrawable(R.drawable.shape_for_custom_spinner))
             minimumHeight = dp(56)
             setPadding(dp(12), 0, dp(12), 0)
             layoutParams = LinearLayout.LayoutParams(
