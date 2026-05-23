@@ -1,5 +1,6 @@
 package com.example.ja2ch
 
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -43,6 +44,21 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
+        private var getContent = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            Log.i("llama", "Selected file uri:\n $uri")
+    //            uri?.let { handleSelectedModel(it) }
+            llamaDialog?.hide()
+            updateBackendStatus("正在加载模型...")
+            startService(Intent(this, MirrorOverlayService::class.java).apply {
+                action = MirrorOverlayService.ACTION_CHANGE_MODEL
+                putExtra(MirrorOverlayService.EXTRA_MODEL_NAME, ImageTranslateEngine.BACKEND_LLAMA)
+                putExtra(ImageTranslateEngine.LLAMA_URL_MODEL, uri.toString())
+            })
+            return@registerForActivityResult
+        }
+        var llamaDialog: Dialog? = null
         lateinit var orc_btn: Button
         lateinit var float_btn: Button
         lateinit var statusT: TextView
@@ -56,7 +72,8 @@ class MainActivity : AppCompatActivity() {
         private var suppressBackendSelect = false
         private val backendItems = listOf(
             "Google ML Kit" to ImageTranslateEngine.BACKEND_GOOGLE,
-            "第三方 API" to ImageTranslateEngine.BACKEND_THIRD_PARTY_API
+            "第三方 API" to ImageTranslateEngine.BACKEND_THIRD_PARTY_API,
+            "tencent/Hy-MT2" to ImageTranslateEngine.BACKEND_LLAMA
         )
         private val apiHttpClient = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -73,11 +90,16 @@ class MainActivity : AppCompatActivity() {
             Img_view.set_img(my_bitmap)
             statusT.text = "选到图片${uri}"
             run_ocr(my_bitmap)
+
         }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        Appevents.llamacallback = {
+            m -> updateBackendStatus(m)
+        }
         orc_btn = findViewById(R.id.button)
         statusT = findViewById(R.id.textView)
         Img_view = findViewById(R.id.img_view)
@@ -88,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         spinner.setPopupBackgroundDrawable(getDrawable(R.drawable.shape_for_custom_spinner))
         apiStatusT = findViewById(R.id.textView3)
         currentBackend = loadSelectedBackend()
-        updateBackendStatus()
+        updateBackendStatus(null)
 
         val itemLabels = backendItems.map { it.first }
 
@@ -114,19 +136,33 @@ class MainActivity : AppCompatActivity() {
                         onSaved = {
                             currentBackend = backend
                             sendBackend(backend)
-                            updateBackendStatus()
+                            updateBackendStatus(null)
                         },
                         onDismissWithoutSave = {
                             selectBackendSilently(previousBackend)
-                            updateBackendStatus()
+                            updateBackendStatus(null)
                         }
                     )
                     return
+                } else if (backend == ImageTranslateEngine.BACKEND_LLAMA) {
+                    val previousBackend = currentBackend
+                        showLLama(
+                            onSaved = {
+                                currentBackend = backend
+                                sendBackend(backend)
+                                updateBackendStatus(null)
+                            },
+                            onDismissWithoutSave = {
+                                selectBackendSilently(previousBackend)
+                                updateBackendStatus(null)
+                            }
+                        )
                 }
 
                 currentBackend = backend
+                if (backend == ImageTranslateEngine.BACKEND_LLAMA) return
                 sendBackend(backend)
-                updateBackendStatus()
+                updateBackendStatus(null)
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 // 一般不用处理
@@ -197,8 +233,10 @@ class MainActivity : AppCompatActivity() {
             .apply()
     }
 
-    private fun updateBackendStatus() {
-        apiStatusT.text = "当前后端: ${backendLabel(currentBackend)}"
+    private fun updateBackendStatus(text: String?) {
+        if (text != null){
+        apiStatusT.text = "$text"
+        } else apiStatusT.text = "当前后端: ${backendLabel(currentBackend)}"
     }
 
     private fun backendLabel(backend: String): String {
@@ -211,6 +249,93 @@ class MainActivity : AppCompatActivity() {
         spinner.setSelection(index)
         spinner.post { suppressBackendSelect = false }
     }
+    private fun showLLama(
+        onSaved: () -> Unit,
+        onDismissWithoutSave: () -> Unit
+    ) {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_panel_card)
+            setPadding(dp(22), dp(22), dp(22), dp(14))
+        }
+        val title = TextView(this).apply {
+            text = "选择模型"
+            setTextColor(getColor(R.color.ink_strong))
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(12)
+            }
+        }
+        val info = TextView(this).apply {
+            text = "请选择 tencent/Hy-MT 模型"
+            setTextColor(getColor(R.color.ink_strong))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(12)
+            }
+        }
+        val loadModelsButton = newDialogButton(
+            text = "选择模型文件",
+            backgroundRes = R.drawable.bg_button_secondary,
+            textColor = getColor(R.color.brand_primary)
+        ).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(44)
+            ).apply {
+                topMargin = dp(8)
+            }
+        }
+        val hint = TextView(this).apply {
+            text = ""
+            setTextColor(getColor(R.color.ink_strong))
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(12)
+            }
+        }
+        loadModelsButton.setOnClickListener {
+            getContent.launch(arrayOf("*/*"))
+//            hint.text = "正在加载中....."
+        }
+
+
+
+        container.addView(title)
+        container.addView(info)
+        container.addView(loadModelsButton)
+        container.addView(hint)
+        val dialog = AlertDialog.Builder(this)
+            .setView(container)
+            .create()
+//        dialog.setOnDismissListener {
+////            if (!saved) onDismissWithoutSave()
+//        }
+        llamaDialog = dialog
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.92f).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT
+        )
+        dialog.window?.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+        )
+    }
+
+
 
     private fun showApiConfigDialog(
         onSaved: () -> Unit,

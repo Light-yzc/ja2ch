@@ -173,6 +173,7 @@
             android:background="@drawable/bg_preview_frame"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
+            android:textColor="@color/ink_strong"
             android:popupBackground="@drawable/shape_for_custom_spinner" />
 
         <TextView

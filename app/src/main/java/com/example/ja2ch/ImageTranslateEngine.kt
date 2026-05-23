@@ -3,7 +3,9 @@ package com.example.ja2ch
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.net.Uri
 import android.util.Log
+import com.arm.aichat.InferenceEngine
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
@@ -23,22 +25,32 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.TimeUnit
+import android.provider.OpenableColumns
+import com.arm.aichat.AiChat
+import kotlinx.coroutines.Job
 
 class ImageTranslateEngine(
     private val engineBG: String,
-    context: Context
+    context: Context,
+    modelUri: Uri?
 ) {
+    lateinit var llamaEngine: InferenceEngine
+    var llamagenjob : Job? = null
+
     companion object {
+        private const val MAX_CHUNK_CHARS = 220
+
         const val BACKEND_GOOGLE = "Google"
         const val BACKEND_THIRD_PARTY_API = "ThirdPartyApi"
-
+        const val BACKEND_LLAMA = "llama"
         const val PREFS_CLOUD_CONFIG = "cloud_config"
         const val PREF_API_URL = "api_url"
         const val PREF_API_KEY = "api_key"
         const val PREF_API_MODEL = "api_model"
         const val PREF_SELECTED_BACKEND = "selected_backend"
-
+        const val LLAMA_URL_MODEL = "llama_uri"
         const val DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions"
         const val DEFAULT_API_MODEL = "gpt-4o-mini"
         const val PREF_PROMPT = "api_prompt"
@@ -46,7 +58,6 @@ class ImageTranslateEngine(
     }
     @Volatile
     private var currentCall: Call? = null
-
     private val appContext = context.applicationContext
     private val ocrEngine = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -67,8 +78,150 @@ class ImageTranslateEngine(
                     .build()
             )
         }
+        else if (engineBG == BACKEND_LLAMA) {
+            llamaEngine = AiChat.getInferenceEngine(appContext)
+            val engineScope = CoroutineScope(
+                SupervisorJob() + Dispatchers.Main.immediate
+            )
+            engineScope.launch {
+                try {
+                    loadLlamaModel(modelUri)
+                    Log.d("Llama", "模型加载完成")
+                    Appevents.llamacallback?.invoke("模型已经加载完毕，开启悬浮窗开始推理")
+                } catch (e: Exception) {
+                    Log.e("Llama", "模型加载失败", e)
+                }
+            }
+        }
     }
 
+
+    suspend fun loadLlamaModel(uri: Uri?) {
+        val modelFile = copyModelToPrivateDir(uri!!)
+        withContext(Dispatchers.IO) {
+            Log.d("LlamaModelLoader", "Loading model: ${modelFile.absolutePath}")
+            Log.d("LlamaModelLoader", "Model size: ${modelFile.length()}")
+            llamaEngine.loadModel(modelFile.absolutePath)
+//            RunHYtrans("1222")
+        }
+    }
+
+    private suspend fun copyModelToPrivateDir(uri: Uri): File {
+        return withContext(Dispatchers.IO) {
+            val modelDir = File(appContext.filesDir, "models")
+
+            if (!modelDir.exists()) {
+                modelDir.mkdirs()
+            }
+
+            val dstFile = File(modelDir, "model.gguf")
+
+            val sourceSize = getUriFileSize(uri)
+
+            if (
+                dstFile.exists() &&
+                sourceSize > 0L &&
+                dstFile.length() == sourceSize
+            ) {
+                Log.d("LlamaModelLoader", "Model already exists, skip copy")
+                Log.d("LlamaModelLoader", "Existing model: ${dstFile.absolutePath}")
+                Log.d("LlamaModelLoader", "Existing size: ${dstFile.length()}")
+
+                return@withContext dstFile
+            }
+
+            appContext.contentResolver.openInputStream(uri).use { input ->
+                requireNotNull(input) {
+                    "Cannot open model uri: $uri"
+                }
+
+                dstFile.outputStream().use { output ->
+                    input.copyTo(output, bufferSize = 1024 * 1024)
+                }
+            }
+
+            Log.d("LlamaModelLoader", "Copied model to: ${dstFile.absolutePath}")
+            Log.d("LlamaModelLoader", "Copied model size: ${dstFile.length()}")
+
+            dstFile
+        }
+    }
+    private fun getUriFileSize(uri: Uri): Long {
+        val projection = arrayOf(OpenableColumns.SIZE)
+
+        appContext.contentResolver.query(
+            uri,
+            projection,
+            null,
+            null,
+            null
+        ).use { cursor ->
+            if (cursor == null) {
+                return -1L
+            }
+
+            if (!cursor.moveToFirst()) {
+                return -1L
+            }
+
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+
+            if (sizeIndex == -1) {
+                return -1L
+            }
+
+            return cursor.getLong(sizeIndex)
+        }
+    }
+    suspend fun RunHYtrans(items: MutableList<OcrItem>, bitmap: Bitmap, onSucc: (Bitmap, List<OcrItem>) -> Unit) {
+//        val input_list: MutableList<String>;
+//        var curlen = 0
+//        var curString = buildString {
+//
+//        } todu:chunk string
+        val input = items.mapIndexed { index, item ->
+            "${index.toString().padStart(3, '0')}\t${item.source_t}"
+        }.joinToString("\n")
+        val prompt = buildString {
+            appendLine("<｜hy_User｜>")
+            appendLine("翻译成简体中文")
+            appendLine("输出规则：")
+            appendLine("每行开头的三位数字编号必须保留")
+            appendLine("编号后面只输出对应中文译文")
+            appendLine("不要解释")
+            appendLine("不要合并行，不要重新排序。")
+            appendLine(input)
+            appendLine()
+            append("<｜hy_Assistant｜>")
+        }
+        val result = StringBuilder()
+        llamaEngine.sendUserPrompt(prompt).collect { token ->
+            Log.d("llama", token)
+            result.append(token)
+            applyLlamaPartialResult(result.toString(), items)
+            withContext(Dispatchers.Main) {
+                onSucc(bitmap, items)
+            }
+        }
+    }
+
+    private fun applyLlamaPartialResult(
+        output: String,
+        items: MutableList<OcrItem>
+    ) {
+        val lineRegex = Regex("""(?m)^\s*(\d{3})\s+(.+?)\s*$""")
+
+        output.lines().forEach { line ->
+            val match = lineRegex.find(line) ?: return@forEach
+
+            val index = match.groupValues[1].toIntOrNull() ?: return@forEach
+            val translated = match.groupValues[2].trim()
+
+            if (index in items.indices && translated.isNotEmpty()) {
+                items[index].trans_t = translated
+            }
+        }
+    }
     fun RunOcrAndTranslate(bitmap: Bitmap, Region: Rect? = null,onSucc: (Bitmap, List<OcrItem>, ) -> Unit) {
         Log.d("TranslateBackend", "RunOcrAndTranslate backend=$engineBG")
         val TmpBitmap: Bitmap
@@ -91,6 +244,10 @@ class ImageTranslateEngine(
                 when (engineBG) {
                     BACKEND_GOOGLE -> translateWithGoogle(items, bitmap, onSucc)
                     BACKEND_THIRD_PARTY_API -> translateWithThirdPartyApi(items, bitmap, onSucc)
+                    BACKEND_LLAMA -> {
+                        val myScope = CoroutineScope(Dispatchers.Main + Job())
+                        llamagenjob = myScope.launch{RunHYtrans(items, bitmap, onSucc)}
+                    }
                     else -> onSucc(bitmap, items)
                 }
             }
@@ -99,9 +256,12 @@ class ImageTranslateEngine(
             }
     }
 
+
     fun cancelCurrentRequest() {
         currentCall?.cancel()
         currentCall = null
+        llamagenjob?.cancel()
+        llamagenjob = null
     }
     private fun translateWithGoogle(
         items: MutableList<OcrItem>,

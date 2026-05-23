@@ -15,6 +15,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.core.net.toUri
 
 class MirrorOverlayService: Service(){
     companion object {
@@ -57,7 +58,7 @@ class MirrorOverlayService: Service(){
                 ImageTranslateEngine.BACKEND_GOOGLE
             ) ?: ImageTranslateEngine.BACKEND_GOOGLE
         Log.d("TranslateBackend", "初始化翻译后端$savedBackend")
-        ocrEngine = ImageTranslateEngine(savedBackend, this)
+//        ocrEngine = ImageTranslateEngine(savedBackend, this, null)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -100,7 +101,14 @@ class MirrorOverlayService: Service(){
             .edit()
             .putString(ImageTranslateEngine.PREF_SELECTED_BACKEND, modelName)
             .apply()
-        ocrEngine = ImageTranslateEngine(modelName, this)
+
+        if (modelName == ImageTranslateEngine.BACKEND_LLAMA) {
+            val modelUri = intent.getStringExtra(ImageTranslateEngine.LLAMA_URL_MODEL)?.toUri()
+
+            ocrEngine = ImageTranslateEngine(modelName, this, modelUri)
+            return
+        }
+        ocrEngine = ImageTranslateEngine(modelName, this, null)
     }
     private fun showmirror(myRegion: Rect?) {
         hidemirror()
@@ -162,6 +170,7 @@ class MirrorOverlayService: Service(){
         rootView = null
         requestID = requestID + 1
         ocrEngine.cancelCurrentRequest()
+
     }
 
     fun Onsucc(bitmap: Bitmap, items: List<OcrItem>) {

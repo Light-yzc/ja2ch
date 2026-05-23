@@ -13,3 +13,7 @@ object CaptureFrameStore {
         return latestbitmap
     }
 }
+
+object Appevents {
+    var llamacallback: ((message: String) -> Unit)? = null
+}
