@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
         var llamaDialog: Dialog? = null
         lateinit var orc_btn: Button
         lateinit var float_btn: Button
+        lateinit var help_btn: Button
         lateinit var statusT: TextView
         lateinit var Img_view: TranslateImageView
         lateinit var translator: Translator
@@ -101,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             m -> updateBackendStatus(m)
         }
         orc_btn = findViewById(R.id.button)
+        help_btn = findViewById(R.id.helpButton)
         statusT = findViewById(R.id.textView)
         Img_view = findViewById(R.id.img_view)
         float_btn = findViewById(R.id.button2)
@@ -171,6 +173,9 @@ class MainActivity : AppCompatActivity() {
 //        todo:change model
         orc_btn.setOnClickListener {
             pick_img.launch("image/*")
+        }
+        help_btn.setOnClickListener {
+            showHelpDialog()
         }
         float_btn.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
@@ -332,6 +337,75 @@ class MainActivity : AppCompatActivity() {
         )
         dialog.window?.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+        )
+    }
+
+    private fun showHelpDialog() {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_panel_card)
+            setPadding(dp(22), dp(22), dp(22), dp(16))
+        }
+
+        val title = TextView(this).apply {
+            text = "使用说明"
+            setTextColor(getColor(R.color.ink_strong))
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+        val desc = TextView(this).apply {
+            text = """
+                1. 点击“开启悬浮窗”，先授予悬浮窗权限。
+                2. 第一次点击悬浮球时，系统会请求截图权限。
+                3. 轻点悬浮球：整屏截图并翻译。
+                4. 长按悬浮球：进入局部框选翻译。
+                5. 点击翻译覆盖层空白处：关闭当前结果。
+                6. 切到 tencent/Hy-MT2 时，需要先选择本地 GGUF 模型文件。
+            """.trimIndent()
+            setTextColor(getColor(R.color.ink_muted))
+            textSize = 14f
+            setLineSpacing(dp(4).toFloat(), 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(12)
+            }
+        }
+
+        val closeButton = Button(this).apply {
+            text = "知道了"
+            textSize = 15f
+            isAllCaps = false
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(getColor(R.color.black))
+            setBackgroundResource(R.drawable.bg_button_secondary)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48)
+            ).apply {
+                topMargin = dp(18)
+            }
+        }
+
+        container.addView(title)
+        container.addView(desc)
+        container.addView(closeButton)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(container)
+            .create()
+
+        closeButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.92f).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT
         )
     }
 
